@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.3.1'
+    id 'org.springframework.boot' version '3.3.0'
     id 'io.spring.dependency-management' version '1.1.5'
 }
 
@@ -8,10 +8,15 @@ group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+    sourceCompatibility = '17'
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
     }
 }
+
 
 repositories {
     mavenCentral()
@@ -35,7 +40,9 @@ dependencies {
     // redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
+    //JSON parser
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+
     implementation 'org.apache.commons:commons-lang3'
 }
 
