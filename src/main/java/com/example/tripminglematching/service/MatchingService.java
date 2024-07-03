@@ -105,7 +105,7 @@ public class MatchingService {
     }
 
     @Transactional
-    public void addUser(Long userPersonalityId) {
+    public void addUser(Long userPersonalityId, String messageId) {
         UserPersonality nowUserPersonality = userPersonalityRepository.findById(userPersonalityId)
                 .orElseThrow(() -> new UserPersonalityNotFound());
         List<Double> newUserVector = nowUserPersonality.toFeatureVector();
@@ -123,20 +123,21 @@ public class MatchingService {
             if (json != null) {
                 userPreferences = mapper.readValue(json, new TypeReference<Map<Long, List<Pair<Long, Double>>>>() {});
             } else {
-                messagePublisher.addUserFailResPublish(userPersonalityId);
+                messagePublisher.addUserFailResPublish(userPersonalityId, messageId);
                 throw new UserPersonalityNotFound();
             }
 
         } catch (Exception e) {
             e.printStackTrace();
-            messagePublisher.addUserFailResPublish(userPersonalityId);
+            messagePublisher.addUserFailResPublish(userPersonalityId, messageId);
             throw new RuntimeException();
         }
 
         userPreferences.entrySet().forEach(entry->{
             Long userId = entry.getKey();
             List<Pair<Long, Double>> preferences = entry.getValue();
-            UserPersonality userPersonality = userPersonalityRepository.getReferenceById(userId);
+            UserPersonality userPersonality = userPersonalityRepository.findById(userId)
+                    .orElseThrow(() -> new UserPersonalityNotFound());
             List<Double> userVector = userPersonality.toFeatureVector();
             double similarity = SimilarityUtils.cosineSimilarity(userVector,newUserVector);
             //기존 유저들의 선호도 배열에 새 유저와의 유사도 넣고 정렬
@@ -154,7 +155,7 @@ public class MatchingService {
                 System.out.println("Stored JSON: " + json);
 
             } catch (Exception e) {
-                messagePublisher.addUserFailResPublish(userPersonalityId);
+                messagePublisher.addUserFailResPublish(userPersonalityId,messageId);
                 e.printStackTrace();
             }
 
@@ -179,7 +180,7 @@ public class MatchingService {
             System.out.println("Stored JSON: " + json);
 
         } catch (Exception e) {
-            messagePublisher.addUserFailResPublish(userPersonalityId);
+            messagePublisher.addUserFailResPublish(userPersonalityId,messageId);
             e.printStackTrace();
         }
 
@@ -188,12 +189,13 @@ public class MatchingService {
             ObjectMapper mapper = new ObjectMapper();
             String json = mapper.writeValueAsString(userPreferences);
             redisTemplate.opsForValue().set(ALL_USER_PREFERENCES_KEY, json);
-            messagePublisher.addUserResPublish(userPersonalityId);
+            messagePublisher.addUserResPublish(userPersonalityId,messageId);
             System.out.println("Stored JSON: " + json);
         } catch (Exception e) {
-            messagePublisher.addUserFailResPublish(userPersonalityId);
+            messagePublisher.addUserFailResPublish(userPersonalityId,messageId);
             e.printStackTrace();
         }
 
     }
+
 }

@@ -12,17 +12,17 @@ public class MessagePublisher {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final String ADD_USER_RES_PUBLISH = "pubsub:addUserRes";
-    private static final String ADD_USER_PUBLISH = "pubsub:addUser";
     private static final String FAIL_TO_ADD_USER_PERSONALITY = "fail to add user personality";
     private static final String ADD_USER_PERSONALITY_SUCCESS = "add user personality success";
 
     public MessagePublisher(RedisTemplate<String, Object> redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
-    public void addUserResPublish(Long userPersonalityId) {
+    public void addUserResPublish(Long userPersonalityId, String messageId) {
         try {
             AddUserResDTO addUserResDTO = new AddUserResDTO();
             addUserResDTO.setMessage(ADD_USER_PERSONALITY_SUCCESS);
+            addUserResDTO.setMessageId(messageId);
             addUserResDTO.setUserPersonalityId(userPersonalityId);
 
             // JSON 객체 생성
@@ -37,11 +37,12 @@ public class MessagePublisher {
 
     }
 
-    public void addUserFailResPublish(Long userPersonalityId) {
+    public void addUserFailResPublish(Long userPersonalityId, String messageId) {
         try {
             AddUserResDTO addUserResDTO = new AddUserResDTO();
             addUserResDTO.setMessage(FAIL_TO_ADD_USER_PERSONALITY);
             addUserResDTO.setUserPersonalityId(userPersonalityId);
+            addUserResDTO.setMessageId(messageId);
 
             // JSON 객체 생성
             String jsonMessage = objectMapper.writeValueAsString(addUserResDTO);

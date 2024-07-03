@@ -38,7 +38,8 @@ public class RedisMessageSubscriber implements MessageListener {
 
             if (channel.equals(ADD_USER_PUBLISH)) {
                 Long userPersonalityId = jsonNode.get("userPersonalityId").asLong();
-                matchingService.addUser(userPersonalityId);
+                String messageId = jsonNode.get("messageId").toString();
+                matchingService.addUser(userPersonalityId, messageId);
             }
         }catch (Exception e) {
             e.printStackTrace();

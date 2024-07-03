@@ -8,4 +8,5 @@ import lombok.Setter;
 public class AddUserResDTO {
     private String message;
     private Long userPersonalityId;
+    private String messageId;
 }
