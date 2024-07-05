@@ -1,6 +1,6 @@
 package com.example.tripminglematching.service;
 
-import com.example.tripminglematching.dto.AddUserResDTO;
+import com.example.tripminglematching.dto.UserPersonalityResDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -11,48 +11,42 @@ public class MessagePublisher {
     private final RedisTemplate<String, Object> redisTemplate;
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
-    private static final String ADD_USER_RES_PUBLISH = "pubsub:addUserRes";
-    private static final String FAIL_TO_ADD_USER_PERSONALITY = "fail to add user personality";
-    private static final String ADD_USER_PERSONALITY_SUCCESS = "add user personality success";
+    //topic
+    public static final String TOPIC_ADD_USER_RES_PUBLISH = "pubsub:addUserRes";
+    public static final String TOPIC_RE_CALCULATE_USER_RES_PUBLISH = "pubsub:reCalculateUserRes";
+    public static final String TOPIC_DELETE_USER_RES_PUBLISH = "pubsub:deleteUserRes";
+
+
+    //message
+    public static final String ADD_USER_PERSONALITY_SUCCESS = "add user personality success";
+    public static final String FAIL_TO_ADD_USER_PERSONALITY = "fail to add user personality";
+    public static final String RE_CALCULATE_USER_PERSONALITY_SUCCESS = "recalculate user personality success";
+    public static final String FAIL_TO_RE_CALCULATE_USER_PERSONALITY = "fail to recalculate user personality";
+    public static final String DELETE_USER_PERSONALITY_SUCCESS = "delete user personality success";
+    public static final String FAIL_TO_DELETE_USER_PERSONALITY = "tail to delete user personality";
 
     public MessagePublisher(RedisTemplate<String, Object> redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
-    public void addUserResPublish(Long userPersonalityId, String messageId) {
+    public void userPersonalityResPublish(Long userPersonalityId, String messageId, String channel, String message) {
         try {
-            AddUserResDTO addUserResDTO = new AddUserResDTO();
-            addUserResDTO.setMessage(ADD_USER_PERSONALITY_SUCCESS);
-            addUserResDTO.setMessageId(messageId);
-            addUserResDTO.setUserPersonalityId(userPersonalityId);
+            UserPersonalityResDTO userPersonalityResDTO = new UserPersonalityResDTO();
+            userPersonalityResDTO.setMessage(message);
+            userPersonalityResDTO.setMessageId(messageId);
+            userPersonalityResDTO.setUserPersonalityId(userPersonalityId);
 
             // JSON 객체 생성
-            String jsonMessage = objectMapper.writeValueAsString(addUserResDTO);
+            String jsonMessage = objectMapper.writeValueAsString(userPersonalityResDTO);
 
             // JSON 메시지를 Redis에 발행
-            redisTemplate.convertAndSend(ADD_USER_RES_PUBLISH, jsonMessage);
-            System.out.println("Published message: " + jsonMessage + " to topic: " + ADD_USER_RES_PUBLISH);
+            redisTemplate.convertAndSend(channel, jsonMessage);
+            System.out.println("Published message: " + jsonMessage + " to topic: " + channel);
         } catch (Exception e) {
             e.printStackTrace();
         }
 
     }
 
-    public void addUserFailResPublish(Long userPersonalityId, String messageId) {
-        try {
-            AddUserResDTO addUserResDTO = new AddUserResDTO();
-            addUserResDTO.setMessage(FAIL_TO_ADD_USER_PERSONALITY);
-            addUserResDTO.setUserPersonalityId(userPersonalityId);
-            addUserResDTO.setMessageId(messageId);
 
-            // JSON 객체 생성
-            String jsonMessage = objectMapper.writeValueAsString(addUserResDTO);
 
-            // JSON 메시지를 Redis에 발행
-            redisTemplate.convertAndSend(ADD_USER_RES_PUBLISH, jsonMessage);
-            System.out.println("Published message: " + jsonMessage + " to topic: " + ADD_USER_RES_PUBLISH);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
 }

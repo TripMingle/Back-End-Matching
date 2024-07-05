@@ -46,6 +46,9 @@ public class RedisConfig {
         container.setConnectionFactory(connectionFactory);  // RedisConnectionFactory를 설정합니다.
 
         container.addMessageListener(messageListener, addUserTopic());
+        container.addMessageListener(messageListener, deleteUserTopic());
+        container.addMessageListener(messageListener, reCalculateUserTopic());
+
 
         return container;
     }
@@ -58,6 +61,16 @@ public class RedisConfig {
     @Bean
     public ChannelTopic addUserTopic() {
         return new ChannelTopic("pubsub:addUser");
+    }
+
+    @Bean
+    public ChannelTopic reCalculateUserTopic() {
+        return new ChannelTopic("pubsub:reCalculateUser");
+    }
+
+    @Bean
+    public ChannelTopic deleteUserTopic() {
+        return new ChannelTopic("pubsub:deleteUser");
     }
 
 

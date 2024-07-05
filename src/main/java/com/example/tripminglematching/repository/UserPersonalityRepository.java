@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface UserPersonalityRepository extends JpaRepository<UserPersonality,Long> {
     List<UserPersonality> findAll();
+
+    List<UserPersonality> findByIdGreaterThan(Long minUserPersonalityId);
 }
