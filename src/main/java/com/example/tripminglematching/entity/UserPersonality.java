@@ -36,6 +36,8 @@ public class UserPersonality {
     private double adventure; // 선호 활동 - 탐험
     private double personality; // 성격
     private double schedule; // 일정 계획 성향
+    private double shopping; // 쇼핑성향
+    private double drink; //음주 성향
 
     public List<Double> toFeatureVector() {
         return Arrays.asList(
@@ -52,7 +54,9 @@ public class UserPersonality {
                 foodExploration * 9.0,
                 adventure * 9.0,
                 personality * 9.0,
-                schedule * 7.0
+                schedule * 7.0,
+                shopping * 10.0,
+                drink * 12.0
         );
     }
 
