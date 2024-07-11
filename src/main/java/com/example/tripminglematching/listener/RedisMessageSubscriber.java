@@ -53,13 +53,7 @@ public class RedisMessageSubscriber implements MessageListener {
                 case(RE_CALCULATE_USER_PUBLISH):
                     userPersonalityId = jsonNode.get("userPersonalityId").asLong();
                     messageId = jsonNode.get("messageId").toString();
-                    Long minUserPersonalityId = jsonNode.get("minUserPersonalityId").asLong();
-                    if(minUserPersonalityId.equals(-1L)){
-                        matchingService.recalculateUserPersonality(userPersonalityId,messageId);
-                    }
-                    else{
-                        matchingService.recalculateUserPartialUserPersonality(userPersonalityId,minUserPersonalityId,messageId);
-                    }
+                    matchingService.recalculateUserPersonality(userPersonalityId,messageId);
                     break;
 
                 case(DELETE_USER_PUBLISH):
