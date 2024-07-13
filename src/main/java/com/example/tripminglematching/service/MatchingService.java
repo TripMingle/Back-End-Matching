@@ -299,7 +299,6 @@ public class MatchingService {
         int maxMatchesPerBoard = (numUsers * userMatchingCount)%numBoards == 0
             ? (numUsers * userMatchingCount)/numBoards : (numUsers * userMatchingCount)/numBoards + 1;
 
-        System.out.println("userMatchingCount : " + userMatchingCount + " maxMatchPerBoard : " + maxMatchesPerBoard);
 
         // 게일-섀플리 알고리즘
         while (!freeUsers.isEmpty()) {

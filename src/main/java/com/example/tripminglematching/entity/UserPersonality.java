@@ -38,6 +38,7 @@ public class UserPersonality {
     private double schedule; // 일정 계획 성향
     private double shopping; // 쇼핑성향
     private double drink; //음주 성향
+    private double ageRange; // 나이대, 자동생성
 
     public List<Double> toFeatureVector() {
         return Arrays.asList(
@@ -56,7 +57,8 @@ public class UserPersonality {
             (personality-3.0) * 9.0,
             (schedule-3.0) * 7.0,
             (shopping-3.0) * 10.0,
-            (drink-3.0) * 12.0
+            (drink-3.0) * 12.0,
+            (ageRange-3.0) * 12.0
         );
     }
 
