@@ -48,6 +48,7 @@ public class RedisConfig {
         container.addMessageListener(messageListener, addUserTopic());
         container.addMessageListener(messageListener, deleteUserTopic());
         container.addMessageListener(messageListener, reCalculateUserTopic());
+        container.addMessageListener(messageListener, matchingTopic());
 
 
         return container;
@@ -72,6 +73,12 @@ public class RedisConfig {
     public ChannelTopic deleteUserTopic() {
         return new ChannelTopic("pubsub:deleteUser");
     }
+
+    @Bean
+    public ChannelTopic matchingTopic() {
+        return new ChannelTopic("pubsub:matching");
+    }
+
 
 
 }

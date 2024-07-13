@@ -41,22 +41,22 @@ public class UserPersonality {
 
     public List<Double> toFeatureVector() {
         return Arrays.asList(
-                gender * 12.0,
-                vegan * 12.0,
-                islam * 12.0,
-                hindu * 12.0,
-                smoking * 8.0,
-                budget * 10.0,
-                accommodationFlexibility * 7.0,
-                foodFlexibility * 7.0,
-                activity * 9.0,
-                instagramPicture * 9.0,
-                foodExploration * 9.0,
-                adventure * 9.0,
-                personality * 9.0,
-                schedule * 7.0,
-                shopping * 10.0,
-                drink * 12.0
+            (gender-3.0) * 12.0,
+            (vegan-3.0) * 12.0,
+            (islam-3.0) * 12.0,
+            (hindu-3.0) * 12.0,
+            (smoking-3.0) * 8.0,
+            (budget-3.0) * 10.0,
+            (accommodationFlexibility-3.0) * 7.0,
+            (foodFlexibility-3.0) * 7.0,
+            (activity-3.0) * 9.0,
+            (instagramPicture-3.0) * 9.0,
+            (foodExploration-3.0) * 9.0,
+            (adventure-3.0) * 9.0,
+            (personality-3.0) * 9.0,
+            (schedule-3.0) * 7.0,
+            (shopping-3.0) * 10.0,
+            (drink-3.0) * 12.0
         );
     }
 

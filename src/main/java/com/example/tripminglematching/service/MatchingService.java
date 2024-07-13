@@ -1,8 +1,12 @@
 package com.example.tripminglematching.service;
 
+import com.example.tripminglematching.entity.Board;
+import com.example.tripminglematching.entity.User;
 import com.example.tripminglematching.entity.UserPersonality;
 import com.example.tripminglematching.exception.UserPersonalityNotFound;
+import com.example.tripminglematching.repository.BoardRepository;
 import com.example.tripminglematching.repository.UserPersonalityRepository;
+import com.example.tripminglematching.repository.UserRepository;
 import com.example.tripminglematching.utils.PairDeserializer;
 import com.example.tripminglematching.utils.PairSerializer;
 import com.example.tripminglematching.utils.SimilarityUtils;
@@ -16,6 +20,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -24,12 +29,15 @@ import java.util.stream.Collectors;
 @Transactional
 public class MatchingService {
     private final UserPersonalityRepository userPersonalityRepository;
+    private final UserRepository userRepository;
+    private final BoardRepository boardRepository;
     private final MessagePublisher messagePublisher;
     private final RedisTemplate<String, Object> redisTemplate;
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final String USER_PREFERENCES_KEY = "userPreferences-"; // 선호도배열
     private static final String DELETED_BIT = "deletedBit-"; //이후 지워진게 있는지
     private static final Integer MAX_SIZE = 50;
+    private final Integer MAX_RECOMMENDATIONS = 10;
 
     @PostConstruct
     void init(){
@@ -196,6 +204,168 @@ public class MatchingService {
             redisTemplate.opsForValue().set(DELETED_BIT+userPersonality.getId(),1)
         );
         messagePublisher.userPersonalityResPublish(userId,messageId,MessagePublisher.TOPIC_DELETE_USER_RES_PUBLISH, MessagePublisher.DELETE_USER_PERSONALITY_SUCCESS);
+    }
+
+    public void matchUserAndBoard(Long userId, String messageId, String countryName, LocalDate startDate, LocalDate endDate){
+        System.out.println(countryName);
+        String country = "South Korea";
+        System.out.println(countryName.equals(country));
+
+        //조건으로 게시물 조회
+        List<Board> boards = boardRepository.findBoardsByCountryNameAndDateRange(countryName,startDate,endDate);
+
+        System.out.println(boards.size());
+
+        UserPersonality myUserPersonality = userPersonalityRepository.findByUserId(userId);
+        userId = myUserPersonality.getId();
+
+        //게시물마다 유저성향을 조회한 뒤 유저와 함쳐 성향벡터 만들기
+        Map<Long, Pair<Long, List<Double>>> boardPreferVector = boards.stream()
+            .collect(Collectors.toMap(
+                Board::getId,
+                board -> Pair.of(board.getUser().getId(), calculateBoardVector(board, messageId))
+            ));
+
+        //모든유저 조회
+        List<UserPersonality> userPersonalities = userPersonalityRepository.findAll();
+        Map<Long, Pair<Long, List<Double>>> userPreferVector = userPersonalities.stream()
+            .collect(Collectors.toMap(
+                userPersonality -> userPersonality.getId(),
+                userPersonality -> Pair.of(userPersonality.getUser().getId(), userPersonality.toFeatureVector())
+            ));
+
+        //양측 유저의 선호도 배열 제작
+        Map<Long, Queue<Long>> userPreferQueue = userPersonalities.stream()
+            .collect(Collectors.toMap(
+                userPersonality -> userPersonality.getId(),
+                userPersonality -> {
+                    Long nowUserId = userPersonality.getId();
+                    List<Double> userVector = userPreferVector.get(nowUserId).getRight();
+
+                    // 미리 유사도를 계산해서 저장
+                    Map<Long, Double> similarityMap = boardPreferVector.entrySet().stream()
+                        .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> {
+                                Long boardAuthor = entry.getValue().getLeft();
+                                return boardAuthor.equals(nowUserId) ? -1.0 :
+                                    SimilarityUtils.cosineSimilarity(userVector, entry.getValue().getRight());
+                            }
+                        ));
+
+                    return similarityMap.entrySet().stream()
+                        .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.toCollection(LinkedList::new));
+                }
+            ));
+
+        // 게시물의 선호도 리스트 생성
+        Map<Long, Map<Long, Integer>> boardPreferList = boards.stream()
+            .collect(Collectors.toMap(
+                Board::getId,
+                board -> {
+                    List<Double> boardVector = boardPreferVector.get(board.getId()).getRight();
+                    Long boardAuthor = board.getUser().getId();
+
+                    // 미리 유사도를 계산해서 저장
+                    Map<Long, Double> similarityMap = userPreferVector.entrySet().stream()
+                        .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> {
+                                Long nowUserId = entry.getKey();
+                                return boardAuthor.equals(nowUserId) ? -1.0 :
+                                    SimilarityUtils.cosineSimilarity(boardVector, entry.getValue().getRight());
+                            }
+                        ));
+
+                    List<Long> sortedUsers = similarityMap.entrySet().stream()
+                        .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.toList());
+
+                    // 유저 ID를 키로, 인덱스를 값으로 하는 맵 생성
+                    Map<Long, Integer> userIndexMap = new HashMap<>();
+                    for (int i = 0; i < sortedUsers.size(); i++) {
+                        userIndexMap.put(sortedUsers.get(i), i);
+                    }
+                    return userIndexMap;
+                }
+            ));
+
+        // 매칭과 프로포즈 초기화
+        Map<Long, Long> userMatches = new HashMap<>(); // userID -> boardID
+        Map<Long, PriorityQueue<Map.Entry<Integer, Long>>> boardMatches = new HashMap<>(); // boardID -> PriorityQueue of (preferenceIndex, userID)
+        Queue<Long> freeUsers = new LinkedList<>(userPersonalities.stream().map(UserPersonality::getId).collect(Collectors.toList()));
+
+        int numUsers = userPersonalities.size();
+        int numBoards = boards.size();
+        int maxMatchesPerBoard = numUsers/numBoards;
+
+        // 게일-섀플리 알고리즘
+        while (!freeUsers.isEmpty()) {
+            Long freeUserId = freeUsers.poll();
+            Queue<Long> userPreferences = userPreferQueue.get(freeUserId);
+
+            while (!userPreferences.isEmpty()) {
+                Long preferredBoardId = userPreferences.poll();
+
+                // 현재 매칭된 유저 리스트를 가져옴 (없으면 새로운 PriorityQueue 생성)
+                PriorityQueue<Map.Entry<Integer, Long>> currentMatches = boardMatches
+                    .computeIfAbsent(preferredBoardId, k -> new PriorityQueue<>((entry1, entry2) -> Integer.compare(entry2.getKey(), entry1.getKey())));
+
+                // 유저의 현재 보드에 대한 선호도 인덱스 가져오기
+                int userPreferenceIndex = boardPreferList.get(preferredBoardId).get(freeUserId);
+
+                if (currentMatches.size() < maxMatchesPerBoard) {
+                    // 보드에 공간이 있으면 유저 매칭
+                    currentMatches.add(new AbstractMap.SimpleEntry<>(userPreferenceIndex, freeUserId));
+                    boardMatches.put(preferredBoardId, currentMatches);
+                    userMatches.put(freeUserId, preferredBoardId);
+                    break;
+                } else {
+                    // 보드가 가득 찬 경우, 현재 매칭된 유저 중 덜 선호되는 유저와 비교
+                    Map.Entry<Integer, Long> leastPreferredUser = currentMatches.peek();
+
+                    if (userPreferenceIndex < leastPreferredUser.getKey()) {
+                        // 새로운 유저가 더 선호되는 경우, 덜 선호되는 유저 교체
+                        currentMatches.poll(); // 덜 선호되는 유저 제거
+                        currentMatches.add(new AbstractMap.SimpleEntry<>(userPreferenceIndex, freeUserId));
+                        boardMatches.put(preferredBoardId, currentMatches);
+                        userMatches.put(freeUserId, preferredBoardId);
+                        freeUsers.add(leastPreferredUser.getValue()); // 교체된 유저는 다시 자유 유저가 됨
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (Map.Entry<Long, Long> entry : userMatches.entrySet()) {
+            Long userId2 = entry.getKey();
+            Long boardId = entry.getValue();
+            System.out.println("UserID: " + userId2 + ", BoardID: " + boardId);
+        }
+
+        //userId를 통해 특정 유저의 게시물선호도배열 publish
+        messagePublisher.matchingResPublish(userMatches.get(userId), messageId, MessagePublisher.TOPIC_MATCHING ,MessagePublisher.MATCHING_SUCCESS);
+    }
+
+    private List<Double> calculateBoardVector (Board board, String messageId){
+        Optional<UserPersonality> userPersonality = userPersonalityRepository.findByUser(board.getUser());
+        if (!userPersonality.isPresent()) {
+            messagePublisher.matchingResPublish(board.getId(), messageId, MessagePublisher.TOPIC_MATCHING ,MessagePublisher.FAIL_TO_MATCHING);
+            throw new UserPersonalityNotFound();
+        }
+        return boardPrefer(userPersonality.get().toFeatureVector(), board);
+    }
+
+    private List<Double> boardPrefer(List<Double> userVector, Board board){
+        userVector.set(0, userVector.get(0) + (board.getPreferGender()-3.0) * 24.0);
+        userVector.set(4, userVector.get(4) + (board.getPreferSmoking()-3.0) * 16.0);
+        userVector.set(9,  userVector.get(9) + (board.getPreferInstagramPicture()-3.0) * 9.0);
+        userVector.set(14,  userVector.get(14) + (board.getPreferShopping()-3.0) * 10.0);
+        userVector.set(15,  userVector.get(15) + (board.getPreferDrink()-3.0) * 24.0);
+        return userVector;
     }
 
 }
