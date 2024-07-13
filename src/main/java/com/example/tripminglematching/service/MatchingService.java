@@ -207,14 +207,8 @@ public class MatchingService {
     }
 
     public void matchUserAndBoard(Long userId, String messageId, String countryName, LocalDate startDate, LocalDate endDate){
-        System.out.println(countryName);
-        String country = "South Korea";
-        System.out.println(countryName.equals(country));
-
         //조건으로 게시물 조회
         List<Board> boards = boardRepository.findBoardsByCountryNameAndDateRange(countryName,startDate,endDate);
-
-        System.out.println(boards.size());
 
         UserPersonality myUserPersonality = userPersonalityRepository.findByUserId(userId);
         userId = myUserPersonality.getId();
@@ -248,7 +242,7 @@ public class MatchingService {
                             Map.Entry::getKey,
                             entry -> {
                                 Long boardAuthor = entry.getValue().getLeft();
-                                return boardAuthor.equals(nowUserId) ? -1.0 :
+                                return boardAuthor.equals(nowUserId) ? -100.0 :
                                     SimilarityUtils.cosineSimilarity(userVector, entry.getValue().getRight());
                             }
                         ));
@@ -274,7 +268,7 @@ public class MatchingService {
                             Map.Entry::getKey,
                             entry -> {
                                 Long nowUserId = entry.getKey();
-                                return boardAuthor.equals(nowUserId) ? -1.0 :
+                                return boardAuthor.equals(nowUserId) ? -100.0 :
                                     SimilarityUtils.cosineSimilarity(boardVector, entry.getValue().getRight());
                             }
                         ));
@@ -294,20 +288,27 @@ public class MatchingService {
             ));
 
         // 매칭과 프로포즈 초기화
-        Map<Long, Long> userMatches = new HashMap<>(); // userID -> boardID
+        Map<Long, List<Long>> userMatches = new HashMap<>();
         Map<Long, PriorityQueue<Map.Entry<Integer, Long>>> boardMatches = new HashMap<>(); // boardID -> PriorityQueue of (preferenceIndex, userID)
         Queue<Long> freeUsers = new LinkedList<>(userPersonalities.stream().map(UserPersonality::getId).collect(Collectors.toList()));
 
         int numUsers = userPersonalities.size();
         int numBoards = boards.size();
-        int maxMatchesPerBoard = numUsers/numBoards;
+        int userMatchingCount = Math.min(5, numBoards);
+        if(numBoards==0)numBoards++;
+        int maxMatchesPerBoard = (numUsers * userMatchingCount)%numBoards == 0
+            ? (numUsers * userMatchingCount)/numBoards : (numUsers * userMatchingCount)/numBoards + 1;
+
+        System.out.println("userMatchingCount : " + userMatchingCount + " maxMatchPerBoard : " + maxMatchesPerBoard);
 
         // 게일-섀플리 알고리즘
         while (!freeUsers.isEmpty()) {
             Long freeUserId = freeUsers.poll();
-            Queue<Long> userPreferences = userPreferQueue.get(freeUserId);
+            Queue<Long> userPreferences = userPreferQueue.getOrDefault(freeUserId, new LinkedList<>());
 
-            while (!userPreferences.isEmpty()) {
+            userMatches.putIfAbsent(freeUserId, new ArrayList<>());
+
+            while (!userPreferences.isEmpty() && userMatches.get(freeUserId).size() < userMatchingCount) {
                 Long preferredBoardId = userPreferences.poll();
 
                 // 현재 매칭된 유저 리스트를 가져옴 (없으면 새로운 PriorityQueue 생성)
@@ -321,7 +322,7 @@ public class MatchingService {
                     // 보드에 공간이 있으면 유저 매칭
                     currentMatches.add(new AbstractMap.SimpleEntry<>(userPreferenceIndex, freeUserId));
                     boardMatches.put(preferredBoardId, currentMatches);
-                    userMatches.put(freeUserId, preferredBoardId);
+                    userMatches.get(freeUserId).add(preferredBoardId);
                     break;
                 } else {
                     // 보드가 가득 찬 경우, 현재 매칭된 유저 중 덜 선호되는 유저와 비교
@@ -332,18 +333,29 @@ public class MatchingService {
                         currentMatches.poll(); // 덜 선호되는 유저 제거
                         currentMatches.add(new AbstractMap.SimpleEntry<>(userPreferenceIndex, freeUserId));
                         boardMatches.put(preferredBoardId, currentMatches);
-                        userMatches.put(freeUserId, preferredBoardId);
+                        userMatches.get(leastPreferredUser.getValue()).remove(preferredBoardId);
+                        userMatches.get(freeUserId).add(preferredBoardId);
                         freeUsers.add(leastPreferredUser.getValue()); // 교체된 유저는 다시 자유 유저가 됨
                         break;
                     }
                 }
+
+            }
+
+            if (userMatches.get(freeUserId).size() < userMatchingCount && !userPreferences.isEmpty()) {
+                freeUsers.add(freeUserId);
             }
         }
 
-        for (Map.Entry<Long, Long> entry : userMatches.entrySet()) {
+        for (Map.Entry<Long, List<Long>> entry : userMatches.entrySet()) {
             Long userId2 = entry.getKey();
-            Long boardId = entry.getValue();
-            System.out.println("UserID: " + userId2 + ", BoardID: " + boardId);
+            List<Long> boardIds = entry.getValue();
+        }
+
+        for (Map.Entry<Long, List<Long>> entry : userMatches.entrySet()) {
+            Long userId2 = entry.getKey();
+            List<Long> boardIds = entry.getValue();
+            System.out.println("UserID: " + userId2 + ", BoardIDs: " + boardIds);
         }
 
         //userId를 통해 특정 유저의 게시물선호도배열 publish
@@ -353,7 +365,7 @@ public class MatchingService {
     private List<Double> calculateBoardVector (Board board, String messageId){
         Optional<UserPersonality> userPersonality = userPersonalityRepository.findByUser(board.getUser());
         if (!userPersonality.isPresent()) {
-            messagePublisher.matchingResPublish(board.getId(), messageId, MessagePublisher.TOPIC_MATCHING ,MessagePublisher.FAIL_TO_MATCHING);
+            messagePublisher.matchingResPublish(null, messageId, MessagePublisher.TOPIC_MATCHING ,MessagePublisher.FAIL_TO_MATCHING);
             throw new UserPersonalityNotFound();
         }
         return boardPrefer(userPersonality.get().toFeatureVector(), board);

@@ -1,5 +1,7 @@
 package com.example.tripminglematching.dto;
 
+import java.util.List;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -7,6 +9,6 @@ import lombok.Setter;
 @Setter
 public class MatchingResDTO {
 	private String message;
-	private Long boardId;
+	private List<Long> boardId;
 	private String messageId;
 }

@@ -1,5 +1,7 @@
 package com.example.tripminglematching.service;
 
+import java.util.List;
+
 import com.example.tripminglematching.dto.MatchingResDTO;
 import com.example.tripminglematching.dto.UserPersonalityResDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,7 +63,7 @@ public class MessagePublisher {
 
     }
 
-    public void matchingResPublish(Long result, String messageId, String channel, String message){
+    public void matchingResPublish(List<Long> result, String messageId, String channel, String message){
         try {
             MatchingResDTO matchingResDTO = new MatchingResDTO();
             matchingResDTO.setBoardId(result);
