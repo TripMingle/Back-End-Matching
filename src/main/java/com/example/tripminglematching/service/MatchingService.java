@@ -373,9 +373,9 @@ public class MatchingService {
     private List<Double> boardPrefer(List<Double> userVector, Board board){
         userVector.set(0, userVector.get(0) + (board.getPreferGender()-3.0) * 24.0);
         userVector.set(4, userVector.get(4) + (board.getPreferSmoking()-3.0) * 16.0);
-        userVector.set(9,  userVector.get(9) + (board.getPreferInstagramPicture()-3.0) * 9.0);
-        userVector.set(14,  userVector.get(14) + (board.getPreferShopping()-3.0) * 10.0);
-        userVector.set(15,  userVector.get(15) + (board.getPreferDrink()-3.0) * 24.0);
+        userVector.set(9,  userVector.get(9) + (board.getPreferPhoto()-3.0) * 9.0);
+        userVector.set(5,  userVector.get(5) + (board.getPreferBudget()-3.0) * 10.0);
+        userVector.set(14,  userVector.get(14) + (board.getPreferDrink()-3.0) * 24.0);
         return userVector;
     }
 
