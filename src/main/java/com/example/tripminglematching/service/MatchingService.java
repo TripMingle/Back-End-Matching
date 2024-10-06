@@ -206,14 +206,17 @@ public class MatchingService {
         messagePublisher.userPersonalityResPublish(userId,messageId,MessagePublisher.TOPIC_DELETE_USER_RES_PUBLISH, MessagePublisher.DELETE_USER_PERSONALITY_SUCCESS);
     }
 
+    final double INF = 100.0;
+
     public void matchUserAndBoard(Long userId, String messageId, String countryName, LocalDate startDate, LocalDate endDate){
+
         //조건으로 게시물 조회
         List<Board> boards = boardRepository.findBoardsByCountryNameAndDateRange(countryName,startDate,endDate);
 
         UserPersonality myUserPersonality = userPersonalityRepository.findByUserId(userId);
-        userId = myUserPersonality.getId();
+        Long userPersonalityId = myUserPersonality.getId();
 
-        //게시물마다 유저성향을 조회한 뒤 유저와 함쳐 성향벡터 만들기
+        //게시물의 작성자의 성향을 조회하여 저장
         Map<Long, Pair<Long, List<Double>>> boardPreferVector = boards.stream()
             .collect(Collectors.toMap(
                 Board::getId,
@@ -228,7 +231,7 @@ public class MatchingService {
                 userPersonality -> Pair.of(userPersonality.getUser().getId(), userPersonality.toFeatureVector())
             ));
 
-        //양측 유저의 선호도 배열 제작
+        //유저의 선호도 배열 제작
         Map<Long, Queue<Long>> userPreferQueue = userPersonalities.stream()
             .collect(Collectors.toMap(
                 userPersonality -> userPersonality.getId(),
@@ -242,7 +245,8 @@ public class MatchingService {
                             Map.Entry::getKey,
                             entry -> {
                                 Long boardAuthor = entry.getValue().getLeft();
-                                return boardAuthor.equals(nowUserId) ? -100.0 :
+                                //만약 유저와 작성자가 동일하다면 선호도를 -INF로 설정하여 선호도를 맨 뒤로 미룬다.
+                                return boardAuthor.equals(nowUserId) ? -INF :
                                     SimilarityUtils.cosineSimilarity(userVector, entry.getValue().getRight());
                             }
                         ));
@@ -254,7 +258,7 @@ public class MatchingService {
                 }
             ));
 
-        // 게시물의 선호도 리스트 생성
+        // 게시물의 선호도 배열 생성
         Map<Long, Map<Long, Integer>> boardPreferList = boards.stream()
             .collect(Collectors.toMap(
                 Board::getId,
@@ -268,7 +272,8 @@ public class MatchingService {
                             Map.Entry::getKey,
                             entry -> {
                                 Long nowUserId = entry.getKey();
-                                return boardAuthor.equals(nowUserId) ? -100.0 :
+                                //만약 유저와 작성자가 동일하다면 선호도를 -INF로 설정하여 선호도를 맨 뒤로 미룬다.
+                                return boardAuthor.equals(nowUserId) ? -INF :
                                     SimilarityUtils.cosineSimilarity(boardVector, entry.getValue().getRight());
                             }
                         ));
@@ -287,6 +292,7 @@ public class MatchingService {
                 }
             ));
 
+
         // 매칭과 프로포즈 초기화
         Map<Long, List<Long>> userMatches = new HashMap<>();
         Map<Long, PriorityQueue<Map.Entry<Integer, Long>>> boardMatches = new HashMap<>(); // boardID -> PriorityQueue of (preferenceIndex, userID)
@@ -294,7 +300,7 @@ public class MatchingService {
 
         int numUsers = userPersonalities.size();
         int numBoards = boards.size();
-        int userMatchingCount = Math.min(5, numBoards);
+        int userMatchingCount = Math.min(MAX_RECOMMENDATIONS, numBoards);
         if(numBoards==0)numBoards++;
         int maxMatchesPerBoard = (numUsers * userMatchingCount)%numBoards == 0
             ? (numUsers * userMatchingCount)/numBoards : (numUsers * userMatchingCount)/numBoards + 1;
@@ -310,11 +316,11 @@ public class MatchingService {
             while (!userPreferences.isEmpty() && userMatches.get(freeUserId).size() < userMatchingCount) {
                 Long preferredBoardId = userPreferences.poll();
 
-                // 현재 매칭된 유저 리스트를 가져옴 (없으면 새로운 PriorityQueue 생성)
+                // 유저의 매칭목록을 가져옴 (없으면 새로운 목록 생성)
                 PriorityQueue<Map.Entry<Integer, Long>> currentMatches = boardMatches
                     .computeIfAbsent(preferredBoardId, k -> new PriorityQueue<>((entry1, entry2) -> Integer.compare(entry2.getKey(), entry1.getKey())));
 
-                // 유저의 현재 보드에 대한 선호도 인덱스 가져오기
+                // 유저의 현재 게시물에 대한 선호도 인덱스 가져오기
                 int userPreferenceIndex = boardPreferList.get(preferredBoardId).get(freeUserId);
 
                 if (currentMatches.size() < maxMatchesPerBoard) {
@@ -354,11 +360,10 @@ public class MatchingService {
         for (Map.Entry<Long, List<Long>> entry : userMatches.entrySet()) {
             Long userId2 = entry.getKey();
             List<Long> boardIds = entry.getValue();
-            System.out.println("UserID: " + userId2 + ", BoardIDs: " + boardIds);
         }
 
         //userId를 통해 특정 유저의 게시물선호도배열 publish
-        messagePublisher.matchingResPublish(userMatches.get(userId), messageId, MessagePublisher.TOPIC_MATCHING ,MessagePublisher.MATCHING_SUCCESS);
+        messagePublisher.matchingResPublish(userMatches.get(userPersonalityId), messageId, MessagePublisher.TOPIC_MATCHING ,MessagePublisher.MATCHING_SUCCESS);
     }
 
     private List<Double> calculateBoardVector (Board board, String messageId){

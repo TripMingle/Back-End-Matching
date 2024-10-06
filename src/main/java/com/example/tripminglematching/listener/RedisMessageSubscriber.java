@@ -81,7 +81,7 @@ public class RedisMessageSubscriber implements MessageListener {
                     JsonNode endDateNode = jsonNode.get("endDate");
                     LocalDate startDate = LocalDate.of(startDateNode.get(0).asInt(), startDateNode.get(1).asInt(), startDateNode.get(2).asInt());
                     LocalDate endDate = LocalDate.of(endDateNode.get(0).asInt(), endDateNode.get(1).asInt(), endDateNode.get(2).asInt());
-                    matchingService.matchUserAndBoard(userId,messageId,countryName,startDate,endDate);
+                    //matchingService.matchUserAndBoard(userId,messageId,countryName,startDate,endDate);
                     break;
             }
         }catch (Exception e) {
